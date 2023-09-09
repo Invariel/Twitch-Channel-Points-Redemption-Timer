@@ -1,8 +1,6 @@
 {
-  "PubSub": {
-    "Username": "",
-    "OauthKey": "",
-    "Expiration": null,
-    "Refresh": ""
+  "Twitch": {
+    "ChannelName": "",
+    "OauthToken": ""
   }
 }

@@ -7,7 +7,7 @@ namespace Twitch_Channel_Points_Redemption_Timer
     internal static class Program
     {
         public static IServiceProvider ServiceProvider { get; private set; }
-        private readonly IConfiguration Configuration { get; set; }
+        private static IConfiguration Configuration { get; set; }
 
         /// <summary>
         ///  The main entry point for the application.
@@ -26,9 +26,11 @@ namespace Twitch_Channel_Points_Redemption_Timer
 
             var services = new ServiceCollection();
             services.ConfigureServices();
-            services.AddConfiguration(configuration);
+            services.AddSingleton<IConfiguration>(configuration);
 
-            Application.Run(new RedemptionTimer());
+            var serviceProvider = services.BuildServiceProvider();
+
+            Application.Run(serviceProvider.GetRequiredService<RedemptionTimer>());
         }
     }
 }
