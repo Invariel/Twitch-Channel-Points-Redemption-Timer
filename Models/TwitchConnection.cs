@@ -4,6 +4,6 @@
     {
         public string ChannelId { get; set; }
         public string ChannelName { get; set; }
-        public string OauthToken { get; set; }
+        public string OAuthToken { get; set; }
     }
 }

@@ -31,28 +31,31 @@
             tbl_MainLayout = new TableLayoutPanel();
             tabControl_Settings = new TabControl();
             tab_Redemptions = new TabPage();
+            dg_Redemptions = new DataGridView();
             tab_Settings = new TabPage();
             tbl_Settings = new TableLayoutPanel();
             grp_Credentials = new GroupBox();
-            grp_Output = new GroupBox();
             tbl_Credentials = new TableLayoutPanel();
             txt_Username = new TextBox();
             txt_UserId = new TextBox();
-            txt_Oauth = new TextBox();
+            txt_OAuth = new TextBox();
             lbl_Username = new Label();
             lbl_UserId = new Label();
             lbl_Oauth = new Label();
             btn_OAuth = new Button();
+            grp_Output = new GroupBox();
             tbl_OutputSettings = new TableLayoutPanel();
             txt_OutputFileName = new TextBox();
             lbl_OutputFile = new Label();
             tbl_MainLayout.SuspendLayout();
             tabControl_Settings.SuspendLayout();
+            tab_Redemptions.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)dg_Redemptions).BeginInit();
             tab_Settings.SuspendLayout();
             tbl_Settings.SuspendLayout();
             grp_Credentials.SuspendLayout();
-            grp_Output.SuspendLayout();
             tbl_Credentials.SuspendLayout();
+            grp_Output.SuspendLayout();
             tbl_OutputSettings.SuspendLayout();
             SuspendLayout();
             // 
@@ -84,6 +87,7 @@
             // 
             // tab_Redemptions
             // 
+            tab_Redemptions.Controls.Add(dg_Redemptions);
             tab_Redemptions.Location = new Point(4, 24);
             tab_Redemptions.Name = "tab_Redemptions";
             tab_Redemptions.Padding = new Padding(3);
@@ -91,6 +95,17 @@
             tab_Redemptions.TabIndex = 0;
             tab_Redemptions.Text = "Redemptions";
             tab_Redemptions.UseVisualStyleBackColor = true;
+            // 
+            // dg_Redemptions
+            // 
+            dg_Redemptions.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Sunken;
+            dg_Redemptions.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dg_Redemptions.Dock = DockStyle.Fill;
+            dg_Redemptions.Location = new Point(3, 3);
+            dg_Redemptions.Name = "dg_Redemptions";
+            dg_Redemptions.RowTemplate.Height = 25;
+            dg_Redemptions.Size = new Size(667, 410);
+            dg_Redemptions.TabIndex = 0;
             // 
             // tab_Settings
             // 
@@ -130,17 +145,6 @@
             grp_Credentials.TabStop = false;
             grp_Credentials.Text = "Credentials";
             // 
-            // grp_Output
-            // 
-            grp_Output.Controls.Add(tbl_OutputSettings);
-            grp_Output.Dock = DockStyle.Fill;
-            grp_Output.Location = new Point(3, 167);
-            grp_Output.Name = "grp_Output";
-            grp_Output.Size = new Size(661, 76);
-            grp_Output.TabIndex = 1;
-            grp_Output.TabStop = false;
-            grp_Output.Text = "Output Settings";
-            // 
             // tbl_Credentials
             // 
             tbl_Credentials.ColumnCount = 2;
@@ -148,7 +152,7 @@
             tbl_Credentials.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 81.2213745F));
             tbl_Credentials.Controls.Add(txt_Username, 1, 0);
             tbl_Credentials.Controls.Add(txt_UserId, 1, 1);
-            tbl_Credentials.Controls.Add(txt_Oauth, 1, 2);
+            tbl_Credentials.Controls.Add(txt_OAuth, 1, 2);
             tbl_Credentials.Controls.Add(lbl_Username, 0, 0);
             tbl_Credentials.Controls.Add(lbl_UserId, 0, 1);
             tbl_Credentials.Controls.Add(lbl_Oauth, 0, 2);
@@ -180,13 +184,13 @@
             txt_UserId.Size = new Size(526, 23);
             txt_UserId.TabIndex = 1;
             // 
-            // txt_Oauth
+            // txt_OAuth
             // 
-            txt_Oauth.Dock = DockStyle.Fill;
-            txt_Oauth.Location = new Point(126, 53);
-            txt_Oauth.Name = "txt_Oauth";
-            txt_Oauth.Size = new Size(526, 23);
-            txt_Oauth.TabIndex = 2;
+            txt_OAuth.Dock = DockStyle.Fill;
+            txt_OAuth.Location = new Point(126, 53);
+            txt_OAuth.Name = "txt_OAuth";
+            txt_OAuth.Size = new Size(526, 23);
+            txt_OAuth.TabIndex = 2;
             // 
             // lbl_Username
             // 
@@ -229,6 +233,17 @@
             btn_OAuth.TabIndex = 6;
             btn_OAuth.Text = "Get OAuth Token";
             btn_OAuth.UseVisualStyleBackColor = true;
+            // 
+            // grp_Output
+            // 
+            grp_Output.Controls.Add(tbl_OutputSettings);
+            grp_Output.Dock = DockStyle.Fill;
+            grp_Output.Location = new Point(3, 167);
+            grp_Output.Name = "grp_Output";
+            grp_Output.Size = new Size(661, 76);
+            grp_Output.TabIndex = 1;
+            grp_Output.TabStop = false;
+            grp_Output.Text = "Output Settings";
             // 
             // tbl_OutputSettings
             // 
@@ -276,12 +291,14 @@
             Text = "Form1";
             tbl_MainLayout.ResumeLayout(false);
             tabControl_Settings.ResumeLayout(false);
+            tab_Redemptions.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)dg_Redemptions).EndInit();
             tab_Settings.ResumeLayout(false);
             tbl_Settings.ResumeLayout(false);
             grp_Credentials.ResumeLayout(false);
-            grp_Output.ResumeLayout(false);
             tbl_Credentials.ResumeLayout(false);
             tbl_Credentials.PerformLayout();
+            grp_Output.ResumeLayout(false);
             tbl_OutputSettings.ResumeLayout(false);
             tbl_OutputSettings.PerformLayout();
             ResumeLayout(false);
@@ -299,7 +316,7 @@
         private TableLayoutPanel tbl_Credentials;
         private TextBox txt_Username;
         private TextBox txt_UserId;
-        private TextBox txt_Oauth;
+        private TextBox txt_OAuth;
         private Label lbl_Username;
         private Label lbl_UserId;
         private Label lbl_Oauth;
@@ -307,5 +324,6 @@
         private TableLayoutPanel tbl_OutputSettings;
         private TextBox txt_OutputFileName;
         private Label lbl_OutputFile;
+        private DataGridView dg_Redemptions;
     }
 }
