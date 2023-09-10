@@ -16,16 +16,17 @@ namespace Twitch_Channel_Points_Redemption_Timer
 {
     public partial class RedemptionTimer : Form
     {
-        internal Dictionary<string, TimeSpan> _timers = new Dictionary<string, TimeSpan>();
+        private ITwitchPubSub _twitchPubSub;
+        private TwitchLib.Api.Helix.Helix _twitchAPI;
+
+        // ([ "group": ({ { "name"; "duration" }, { "name"; "duration" }, ... }) ]);
+        internal Dictionary<string, List<TimedRedemption>> _timers = new Dictionary<string, List<TimedRedemption>>(StringComparer.InvariantCultureIgnoreCase);
         private Timer _timer;
         private TimeSpan _updateInterval = new TimeSpan(0, 0, 0, 0, 100);
 
         internal BindingList<LocalRedemption> _redemptions = new BindingList<LocalRedemption>();
         private string outputFilename;
         private FileStream outputFile;
-
-        private ITwitchPubSub _twitchPubSub;
-        private TwitchLib.Api.Helix.Helix _twitchAPI;
 
         private TwitchConnection _twitchConnection;
 
@@ -62,8 +63,9 @@ namespace Twitch_Channel_Points_Redemption_Timer
             _redemptions.AllowNew = true;
             _redemptions.AllowEdit = true;
             _redemptions.AllowRemove = true;
+            _redemptions.ListChanged += SaveRedemptions;
+
             dg_Redemptions.DataSource = _redemptions;
-            dg_Redemptions.DataBindings.CollectionChanged += SaveRedemptions;
             dg_Redemptions.CellValidating += ValidateTimeSpan;
 
             UpdateSettingsFields();
@@ -87,10 +89,11 @@ namespace Twitch_Channel_Points_Redemption_Timer
 
         private void UpdateRedemptions()
         {
-            dg_Redemptions.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
-            dg_Redemptions.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
-            dg_Redemptions.Columns[2].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-            dg_Redemptions.Columns[3].AutoSizeMode = DataGridViewAutoSizeColumnMode.ColumnHeader;
+            dg_Redemptions.Columns["Name"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+            dg_Redemptions.Columns["Duration"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+            dg_Redemptions.Columns["Group"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+            dg_Redemptions.Columns["UseMessage"].AutoSizeMode = DataGridViewAutoSizeColumnMode.ColumnHeader;
+            dg_Redemptions.Columns["Enabled"].AutoSizeMode = DataGridViewAutoSizeColumnMode.ColumnHeader;
         }
 
         private void ValidateTimeSpan(object? sender, DataGridViewCellValidatingEventArgs e)
@@ -122,6 +125,8 @@ namespace Twitch_Channel_Points_Redemption_Timer
                     WriteIndented = true
                 });
 
+                serializedRedemptions = $"{{ \"Output\": {serializedRedemptions} }}";
+
                 File.WriteAllText("AppSettings.json", serializedRedemptions);
 
                 _bindingRedemptions = false;
@@ -145,37 +150,82 @@ namespace Twitch_Channel_Points_Redemption_Timer
 
             if (redemption is not null)
             {
+                string groupName = redemption.Group.Trim();
                 string key = redemption.UseMessage ? e.RewardRedeemed.Redemption.UserInput : e.RewardRedeemed.Redemption.Reward.Title;
 
-                if (_timers.ContainsKey(key))
+                if (_timers.ContainsKey(groupName))
                 {
-                    _timers[key] += redemption.Duration;
+                    var existingRedemption = _timers[groupName].FirstOrDefault(r => r.Name.Equals(key, StringComparison.OrdinalIgnoreCase));
+
+                    if (existingRedemption is null)
+                    {
+                        _timers[groupName].Add(new TimedRedemption { Name = key, Duration = redemption.Duration });
+                    }
+                    else
+                    {
+                        existingRedemption.Duration = existingRedemption.Duration + redemption.Duration;
+                    }
                 }
                 else
                 {
-                    _timers.Add(key, redemption.Duration);
+                    _timers.Add(groupName, new List<TimedRedemption>() { new TimedRedemption { Name = key, Duration = redemption.Duration } } );
+                }
+            }
+        }
+
+        /// <summary></summary>
+        /// <param name="redemption"></param>
+        /// <returns>True if the redemption has time remaining, false otherwise.</returns>
+        private bool UpdateRedemption(ref TimedRedemption redemption)
+        {
+            redemption.Duration = redemption.Duration.Subtract(_updateInterval);
+            return redemption.Duration > TimeSpan.Zero;
+        }
+
+        private void UpdateGroup(string group)
+        {
+            if (string.IsNullOrEmpty(group))
+            {
+                _timers[group] = _timers[group].Where(r => UpdateRedemption(ref r)).ToList();
+            }
+            else
+            {
+                TimedRedemption firstRedemption = _timers[group].First();
+                if (!UpdateRedemption(ref firstRedemption))
+                {
+                    _timers[group].Remove(firstRedemption);
                 }
             }
         }
 
         private void UpdateTimes(object? sender, ElapsedEventArgs _)
         {
-            string outputString = "";
-            foreach (string eventName in _timers.Keys)
+            foreach (string groupName in _timers.Keys)
             {
-                TimeSpan currentTimespan = _timers[eventName];
+                UpdateGroup(groupName);
 
-                currentTimespan = currentTimespan.Subtract(_updateInterval);
+                if (_timers[groupName].Count == 0)
+                {
+                    _timers.Remove(groupName);
+                }
+            }
 
-                if (currentTimespan <= TimeSpan.Zero)
+            string outputString = "";
+
+            foreach (string groupName in _timers.Keys)
+            {
+                outputString += $"{groupName}{Environment.NewLine}";
+
+                _timers[groupName].ForEach(r =>
                 {
-                    _timers.Remove(eventName);
-                }
-                else
-                {
-                    _timers[eventName] = currentTimespan;
-                    outputString += $"{eventName}: {_timers[eventName]:hh\\:mm\\:ss}{Environment.NewLine}";
-                }
+                    string curString = r.Name + " - ";
+
+                    if (r.Duration.Hours > 0) { curString += r.Duration.ToString(@"h\:mm\:ss"); }
+                    else { curString += r.Duration.ToString(@"m\:ss"); }
+                    outputString += $"{curString}{Environment.NewLine}";
+                });
+
+                outputString += Environment.NewLine;
             }
 
             outputFile.Position = 0;
