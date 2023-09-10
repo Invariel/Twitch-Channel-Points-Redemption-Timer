@@ -288,7 +288,7 @@
             ClientSize = new Size(800, 450);
             Controls.Add(tbl_MainLayout);
             Name = "RedemptionTimer";
-            Text = "Form1";
+            Text = "Redemption Timer";
             tbl_MainLayout.ResumeLayout(false);
             tabControl_Settings.ResumeLayout(false);
             tab_Redemptions.ResumeLayout(false);

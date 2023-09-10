@@ -168,7 +168,7 @@ namespace Twitch_Channel_Points_Redemption_Timer
                 }
                 else
                 {
-                    _timers.Add(groupName, new List<TimedRedemption>() { new TimedRedemption { Name = key, Duration = redemption.Duration } } );
+                    _timers.Add(groupName, new List<TimedRedemption>() { new TimedRedemption { Name = key, Duration = redemption.Duration } });
                 }
             }
         }
