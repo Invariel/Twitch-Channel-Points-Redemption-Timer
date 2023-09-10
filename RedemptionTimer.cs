@@ -1,10 +1,13 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Win32;
 using System.ComponentModel;
 using System.Text.Json;
+using System.Timers;
 using Twitch_Channel_Points_Redemption_Timer.Models;
 using TwitchLib.PubSub.Interfaces;
 
 using LocalRedemption = Twitch_Channel_Points_Redemption_Timer.Models.Redemption;
+using Timer = System.Timers.Timer;
 
 // Webauth URL: https://invariel.ca/webauth/twitch_auth.html
 // Client ID: arjb0z5kjqs974gbwblt8aryaugvmc
@@ -13,8 +16,13 @@ namespace Twitch_Channel_Points_Redemption_Timer
 {
     public partial class RedemptionTimer : Form
     {
+        internal Dictionary<string, TimeSpan> _timers = new Dictionary<string, TimeSpan>();
+        private Timer _timer;
+        private TimeSpan _updateInterval = new TimeSpan(0, 0, 0, 0, 100);
+
         internal BindingList<LocalRedemption> _redemptions = new BindingList<LocalRedemption>();
-        private string outputFile;
+        private string outputFilename;
+        private FileStream outputFile;
 
         private ITwitchPubSub _twitchPubSub;
         private TwitchLib.Api.Helix.Helix _twitchAPI;
@@ -46,7 +54,7 @@ namespace Twitch_Channel_Points_Redemption_Timer
             Output output = new Output();
             configuration.GetRequiredSection("Output").Bind(output);
 
-            outputFile = output.OutputFile;
+            outputFilename = output.OutputFile;
             _redemptions = new BindingList<LocalRedemption>(output.Redemptions);
 
             InitializeComponent();
@@ -60,6 +68,13 @@ namespace Twitch_Channel_Points_Redemption_Timer
 
             UpdateSettingsFields();
             UpdateRedemptions();
+
+            _timer = new Timer();
+            _timer.Interval = _updateInterval.TotalMilliseconds;
+            _timer.Elapsed += UpdateTimes;
+            _timer.Start();
+
+            outputFile = File.Open(outputFilename, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read);
         }
 
         private void UpdateSettingsFields()
@@ -67,7 +82,7 @@ namespace Twitch_Channel_Points_Redemption_Timer
             txt_Username.Text = _twitchConnection.ChannelName;
             txt_UserId.Text = _twitchConnection.ChannelId;
             txt_OAuth.Text = _twitchConnection.OAuthToken;
-            txt_OutputFileName.Text = outputFile;
+            txt_OutputFileName.Text = outputFilename;
         }
 
         private void UpdateRedemptions()
@@ -97,7 +112,7 @@ namespace Twitch_Channel_Points_Redemption_Timer
                 _bindingRedemptions = true;
 
                 Output output = new Output();
-                output.OutputFile = outputFile;
+                output.OutputFile = outputFilename;
                 output.Redemptions = _redemptions.ToList<LocalRedemption>();
 
                 output.Redemptions.RemoveAll(r => string.IsNullOrEmpty(r.Name));
@@ -126,12 +141,47 @@ namespace Twitch_Channel_Points_Redemption_Timer
 
         private void _twitchPubSub_OnChannelPointsRewardRedeemed(object? sender, TwitchLib.PubSub.Events.OnChannelPointsRewardRedeemedArgs e)
         {
-            LocalRedemption? redemption = _redemptions.FirstOrDefault(r => r.Name.Equals(e.RewardRedeemed.Redemption.Reward.Title, StringComparison.OrdinalIgnoreCase));
+            LocalRedemption? redemption = _redemptions.FirstOrDefault(r => r.Name.Equals(e.RewardRedeemed.Redemption.Reward.Title, StringComparison.OrdinalIgnoreCase) && r.Enabled);
 
             if (redemption is not null)
             {
+                string key = redemption.UseMessage ? e.RewardRedeemed.Redemption.UserInput : e.RewardRedeemed.Redemption.Reward.Title;
 
+                if (_timers.ContainsKey(key))
+                {
+                    _timers[key] += redemption.Duration;
+                }
+                else
+                {
+                    _timers.Add(key, redemption.Duration);
+                }
             }
+        }
+
+        private void UpdateTimes(object? sender, ElapsedEventArgs _)
+        {
+            string outputString = "";
+            foreach (string eventName in _timers.Keys)
+            {
+                TimeSpan currentTimespan = _timers[eventName];
+
+                currentTimespan = currentTimespan.Subtract(_updateInterval);
+
+                if (currentTimespan <= TimeSpan.Zero)
+                {
+                    _timers.Remove(eventName);
+                }
+                else
+                {
+                    _timers[eventName] = currentTimespan;
+                    outputString += $"{eventName}: {_timers[eventName]:hh\\:mm\\:ss}{Environment.NewLine}";
+                }
+            }
+
+            outputFile.Position = 0;
+            outputFile.SetLength(0);
+            outputFile.Write(System.Text.Encoding.GetEncoding("UTF-8").GetBytes(outputString), 0, outputString.Length);
+            outputFile.Flush();
         }
     }
 }
