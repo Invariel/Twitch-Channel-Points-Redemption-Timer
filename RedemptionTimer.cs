@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Configuration;
-using Microsoft.Win32;
 using System.ComponentModel;
 using System.Text.Json;
 using System.Timers;
 using Twitch_Channel_Points_Redemption_Timer.Models;
+using TwitchLib.Api.Helix;
 using TwitchLib.PubSub.Interfaces;
 
 using LocalRedemption = Twitch_Channel_Points_Redemption_Timer.Models.Redemption;
@@ -16,8 +16,21 @@ namespace Twitch_Channel_Points_Redemption_Timer
 {
     public partial class RedemptionTimer : Form
     {
+        private string _isConnected = "Connected";
+        private string _isNotConnected = "Start Listening";
+
+        private bool timersEnabled = true;
+        private string _enableTimers = "Enable Timers";
+        private string _disableTimers = "Pause Timers";
+
+        private bool soundsEnabled = true;
+        private string _enableSounds = "Unmute Sounds";
+        private string _muteSounds = "Mute Sounds";
+
+        // Figure out how to play sound.  :|
+
         private ITwitchPubSub _twitchPubSub;
-        private TwitchLib.Api.Helix.Helix _twitchAPI;
+        private Helix _helix;
 
         // ([ "group": ({ { "name"; "duration" }, { "name"; "duration" }, ... }) ]);
         internal Dictionary<string, List<TimedRedemption>> _timers = new Dictionary<string, List<TimedRedemption>>(StringComparer.InvariantCultureIgnoreCase);
@@ -37,11 +50,19 @@ namespace Twitch_Channel_Points_Redemption_Timer
             _twitchConnection = new TwitchConnection();
             configuration.GetRequiredSection("Twitch").Bind(_twitchConnection);
 
-            _twitchAPI = new TwitchLib.Api.Helix.Helix();
-            _twitchAPI.Settings.ClientId = "hw23lau0o8duwhk5h3wgpal4mbznyl";
-            _twitchAPI.Settings.AccessToken = _twitchConnection.OAuthToken;
-            var userIds = _twitchAPI.Users.GetUsersAsync(logins: new List<string>() { _twitchConnection.ChannelName }).GetAwaiter().GetResult();
-            _twitchConnection.ChannelId = userIds.Users[0].Id;
+            InitializeComponent();
+
+            _redemptions.AllowNew = true;
+            _redemptions.AllowEdit = true;
+            _redemptions.AllowRemove = true;
+            _redemptions.ListChanged += SaveRedemptions;
+            dg_Redemptions.DataSource = _redemptions;
+            dg_Redemptions.CellValidating += ValidateTimeSpan;
+
+            UpdateSettingsFields();
+            UpdateRedemptions();
+
+            InitializeHelix();
 
             _twitchPubSub = pubsub;
 
@@ -49,27 +70,23 @@ namespace Twitch_Channel_Points_Redemption_Timer
             _twitchPubSub.OnPubSubServiceConnected += _twitchPubSub_OnPubSubServiceConnected;
             _twitchPubSub.OnPubSubServiceError += _twitchPubSub_OnPubSubServiceError;
 
-            _twitchPubSub.ListenToChannelPoints(_twitchConnection.ChannelId);
-            _twitchPubSub.Connect();
-
             Output output = new Output();
             configuration.GetRequiredSection("Output").Bind(output);
 
             outputFilename = output.OutputFile;
             _redemptions = new BindingList<LocalRedemption>(output.Redemptions);
 
-            InitializeComponent();
+            txt_UserId.TextChanged += delegate { InitializeHelix(); };
+            txt_OAuth.TextChanged += delegate { InitializeHelix(); };
 
-            _redemptions.AllowNew = true;
-            _redemptions.AllowEdit = true;
-            _redemptions.AllowRemove = true;
-            _redemptions.ListChanged += SaveRedemptions;
+            btn_OAuth.Click += GenerateOAuthToken;
+            btn_RedemptionCreate.Click += CreateRedemption;
+            btn_StartListening.Click += ConnectToTwitch;
 
-            dg_Redemptions.DataSource = _redemptions;
-            dg_Redemptions.CellValidating += ValidateTimeSpan;
-
-            UpdateSettingsFields();
-            UpdateRedemptions();
+            btn_EnableAll.Click += EnableAllRedemptions;
+            btn_DisableAll.Click += DisableAllRedemptions;
+            btn_MuteSounds.Click += MuteOrUnmuteSounds;
+            btn_PauseTimers.Click += PauseOrUnpauseTimers;
 
             _timer = new Timer();
             _timer.Interval = _updateInterval.TotalMilliseconds;
@@ -89,8 +106,10 @@ namespace Twitch_Channel_Points_Redemption_Timer
 
         private void UpdateRedemptions()
         {
-            dg_Redemptions.Columns["Name"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+            dg_Redemptions.Columns["Name"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
             dg_Redemptions.Columns["Duration"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+            dg_Redemptions.Columns["ActiveSoundEffect"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+            dg_Redemptions.Columns["ExpiredSoundEffect"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
             dg_Redemptions.Columns["Group"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
             dg_Redemptions.Columns["UseMessage"].AutoSizeMode = DataGridViewAutoSizeColumnMode.ColumnHeader;
             dg_Redemptions.Columns["Enabled"].AutoSizeMode = DataGridViewAutoSizeColumnMode.ColumnHeader;
@@ -106,6 +125,26 @@ namespace Twitch_Channel_Points_Redemption_Timer
                     e.Cancel = true;
                 }
             }
+        }
+
+        private void MuteOrUnmuteSounds(object? sender, EventArgs? e)
+        {
+            soundsEnabled = !soundsEnabled;
+
+            btn_MuteSounds.Invoke((MethodInvoker)delegate
+            {
+                btn_MuteSounds.Text = soundsEnabled ? _muteSounds : _enableSounds;
+            });
+        }
+
+        private void PauseOrUnpauseTimers(object? sender, EventArgs? e)
+        {
+            timersEnabled = !timersEnabled;
+
+            btn_PauseTimers.Invoke((MethodInvoker)delegate
+            {
+                btn_PauseTimers.Text = timersEnabled ? _disableTimers : _enableTimers;
+            });
         }
 
         private void SaveRedemptions(object? sender, EventArgs? e)
@@ -137,11 +176,23 @@ namespace Twitch_Channel_Points_Redemption_Timer
         {
             Console.WriteLine("Connected to Twitch PubSub.");
             _twitchPubSub.SendTopics(_twitchConnection.OAuthToken);
+
+            btn_StartListening.Invoke((MethodInvoker)delegate
+            {
+                btn_StartListening.Text = _isConnected;
+                btn_StartListening.Enabled = false;
+            });
         }
 
         private void _twitchPubSub_OnPubSubServiceError(object? sender, EventArgs? e)
         {
-            Console.WriteLine("Error in connecting to Twitch.  Inspect 'e'.");
+            MessageBox.Show($"Error in connecting to Twitch.{Environment.NewLine}{e}");
+
+            btn_StartListening.Invoke((MethodInvoker)delegate
+            {
+                btn_StartListening.Text = _isNotConnected;
+                btn_StartListening.Enabled = true;
+            });
         }
 
         private void _twitchPubSub_OnChannelPointsRewardRedeemed(object? sender, TwitchLib.PubSub.Events.OnChannelPointsRewardRedeemedArgs e)
@@ -193,6 +244,20 @@ namespace Twitch_Channel_Points_Redemption_Timer
                 TimedRedemption firstRedemption = _timers[group].First();
                 if (!UpdateRedemption(ref firstRedemption))
                 {
+                    string? soundFile = _redemptions.FirstOrDefault(r => r.Name == firstRedemption.Name)?.ExpiredSoundEffect ?? null;
+
+                    if (!string.IsNullOrEmpty(soundFile) && File.Exists(soundFile))
+                    {
+                        try
+                        {
+                            // Sound implementation here.
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"Your sound file '{soundFile}' failed to play.  Reason: {ex.Message}");
+                        }
+                    }
+
                     _timers[group].Remove(firstRedemption);
                 }
             }
@@ -200,6 +265,11 @@ namespace Twitch_Channel_Points_Redemption_Timer
 
         private void UpdateTimes(object? sender, ElapsedEventArgs _)
         {
+            if (!timersEnabled)
+            {
+                return;
+            }
+
             foreach (string groupName in _timers.Keys)
             {
                 UpdateGroup(groupName);
