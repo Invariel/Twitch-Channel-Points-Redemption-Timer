@@ -28,6 +28,8 @@
         /// </summary>
         private void InitializeComponent()
         {
+            DataGridViewCellStyle dataGridViewCellStyle1 = new DataGridViewCellStyle();
+            DataGridViewCellStyle dataGridViewCellStyle2 = new DataGridViewCellStyle();
             tbl_MainLayout = new TableLayoutPanel();
             tabControl_Settings = new TabControl();
             tab_Redemptions = new TabPage();
@@ -56,9 +58,11 @@
             txt_RedemptionName = new TextBox();
             lbl_RedemptionPoints = new Label();
             numud_RedemptionPoints = new NumericUpDown();
-            lbl_RedemptionPrompt = new Label();
-            txt_RedemptionPrompt = new TextBox();
             btn_RedemptionCreate = new Button();
+            txt_RedemptionPrompt = new TextBox();
+            lbl_RedemptionPrompt = new Label();
+            lbl_RedemptionUserInputRequired = new Label();
+            chk_RedemptionUserInputRequired = new CheckBox();
             tbl_Controls = new TableLayoutPanel();
             lbl_TwitchControls = new Label();
             btn_EnableAll = new Button();
@@ -70,8 +74,6 @@
             lbl_Volume = new Label();
             numud_Volume = new NumericUpDown();
             btn_StartListening = new Button();
-            lbl_RedemptionUserInputRequired = new Label();
-            chk_RedemptionUserInputRequired = new CheckBox();
             tbl_MainLayout.SuspendLayout();
             tabControl_Settings.SuspendLayout();
             tab_Redemptions.SuspendLayout();
@@ -131,7 +133,23 @@
             // dg_Redemptions
             // 
             dg_Redemptions.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Sunken;
+            dataGridViewCellStyle1.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dataGridViewCellStyle1.BackColor = SystemColors.Control;
+            dataGridViewCellStyle1.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            dataGridViewCellStyle1.ForeColor = SystemColors.WindowText;
+            dataGridViewCellStyle1.SelectionBackColor = SystemColors.Highlight;
+            dataGridViewCellStyle1.SelectionForeColor = SystemColors.HighlightText;
+            dataGridViewCellStyle1.WrapMode = DataGridViewTriState.True;
+            dg_Redemptions.ColumnHeadersDefaultCellStyle = dataGridViewCellStyle1;
             dg_Redemptions.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dataGridViewCellStyle2.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dataGridViewCellStyle2.BackColor = SystemColors.Window;
+            dataGridViewCellStyle2.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            dataGridViewCellStyle2.ForeColor = SystemColors.ControlText;
+            dataGridViewCellStyle2.SelectionBackColor = SystemColors.Highlight;
+            dataGridViewCellStyle2.SelectionForeColor = SystemColors.HighlightText;
+            dataGridViewCellStyle2.WrapMode = DataGridViewTriState.False;
+            dg_Redemptions.DefaultCellStyle = dataGridViewCellStyle2;
             dg_Redemptions.Dock = DockStyle.Fill;
             dg_Redemptions.Location = new Point(3, 3);
             dg_Redemptions.Name = "dg_Redemptions";
@@ -431,6 +449,24 @@
             numud_RedemptionPoints.Size = new Size(224, 23);
             numud_RedemptionPoints.TabIndex = 3;
             // 
+            // btn_RedemptionCreate
+            // 
+            btn_RedemptionCreate.Dock = DockStyle.Fill;
+            btn_RedemptionCreate.Location = new Point(428, 63);
+            btn_RedemptionCreate.Name = "btn_RedemptionCreate";
+            btn_RedemptionCreate.Size = new Size(224, 24);
+            btn_RedemptionCreate.TabIndex = 6;
+            btn_RedemptionCreate.Text = "Create Redemption";
+            btn_RedemptionCreate.UseVisualStyleBackColor = true;
+            // 
+            // txt_RedemptionPrompt
+            // 
+            txt_RedemptionPrompt.Dock = DockStyle.Fill;
+            txt_RedemptionPrompt.Location = new Point(428, 33);
+            txt_RedemptionPrompt.Name = "txt_RedemptionPrompt";
+            txt_RedemptionPrompt.Size = new Size(224, 23);
+            txt_RedemptionPrompt.TabIndex = 5;
+            // 
             // lbl_RedemptionPrompt
             // 
             lbl_RedemptionPrompt.AutoSize = true;
@@ -442,23 +478,27 @@
             lbl_RedemptionPrompt.Text = "Prompt";
             lbl_RedemptionPrompt.TextAlign = ContentAlignment.MiddleRight;
             // 
-            // txt_RedemptionPrompt
+            // lbl_RedemptionUserInputRequired
             // 
-            txt_RedemptionPrompt.Dock = DockStyle.Fill;
-            txt_RedemptionPrompt.Location = new Point(428, 33);
-            txt_RedemptionPrompt.Name = "txt_RedemptionPrompt";
-            txt_RedemptionPrompt.Size = new Size(224, 23);
-            txt_RedemptionPrompt.TabIndex = 5;
+            lbl_RedemptionUserInputRequired.AutoSize = true;
+            lbl_RedemptionUserInputRequired.Dock = DockStyle.Fill;
+            lbl_RedemptionUserInputRequired.Location = new Point(3, 30);
+            lbl_RedemptionUserInputRequired.Name = "lbl_RedemptionUserInputRequired";
+            lbl_RedemptionUserInputRequired.Size = new Size(92, 30);
+            lbl_RedemptionUserInputRequired.TabIndex = 7;
+            lbl_RedemptionUserInputRequired.Text = "User Input?";
+            lbl_RedemptionUserInputRequired.TextAlign = ContentAlignment.MiddleRight;
             // 
-            // btn_RedemptionCreate
+            // chk_RedemptionUserInputRequired
             // 
-            btn_RedemptionCreate.Dock = DockStyle.Fill;
-            btn_RedemptionCreate.Location = new Point(428, 63);
-            btn_RedemptionCreate.Name = "btn_RedemptionCreate";
-            btn_RedemptionCreate.Size = new Size(224, 24);
-            btn_RedemptionCreate.TabIndex = 6;
-            btn_RedemptionCreate.Text = "Create Redemption";
-            btn_RedemptionCreate.UseVisualStyleBackColor = true;
+            chk_RedemptionUserInputRequired.AutoSize = true;
+            chk_RedemptionUserInputRequired.CheckAlign = ContentAlignment.MiddleCenter;
+            chk_RedemptionUserInputRequired.Dock = DockStyle.Fill;
+            chk_RedemptionUserInputRequired.Location = new Point(101, 33);
+            chk_RedemptionUserInputRequired.Name = "chk_RedemptionUserInputRequired";
+            chk_RedemptionUserInputRequired.Size = new Size(223, 24);
+            chk_RedemptionUserInputRequired.TabIndex = 8;
+            chk_RedemptionUserInputRequired.UseVisualStyleBackColor = true;
             // 
             // tbl_Controls
             // 
@@ -599,28 +639,6 @@
             btn_StartListening.TabIndex = 10;
             btn_StartListening.Text = "Start Listening";
             btn_StartListening.UseVisualStyleBackColor = true;
-            // 
-            // lbl_RedemptionUserInputRequired
-            // 
-            lbl_RedemptionUserInputRequired.AutoSize = true;
-            lbl_RedemptionUserInputRequired.Dock = DockStyle.Fill;
-            lbl_RedemptionUserInputRequired.Location = new Point(3, 30);
-            lbl_RedemptionUserInputRequired.Name = "lbl_RedemptionUserInputRequired";
-            lbl_RedemptionUserInputRequired.Size = new Size(92, 30);
-            lbl_RedemptionUserInputRequired.TabIndex = 7;
-            lbl_RedemptionUserInputRequired.Text = "User Input?";
-            lbl_RedemptionUserInputRequired.TextAlign = ContentAlignment.MiddleRight;
-            // 
-            // chk_RedemptionUserInputRequired
-            // 
-            chk_RedemptionUserInputRequired.AutoSize = true;
-            chk_RedemptionUserInputRequired.CheckAlign = ContentAlignment.MiddleCenter;
-            chk_RedemptionUserInputRequired.Dock = DockStyle.Fill;
-            chk_RedemptionUserInputRequired.Location = new Point(101, 33);
-            chk_RedemptionUserInputRequired.Name = "chk_RedemptionUserInputRequired";
-            chk_RedemptionUserInputRequired.Size = new Size(223, 24);
-            chk_RedemptionUserInputRequired.TabIndex = 8;
-            chk_RedemptionUserInputRequired.UseVisualStyleBackColor = true;
             // 
             // RedemptionTimer
             // 

@@ -1,7 +1,8 @@
-using Microsoft.Extensions.Configuration;
 using System.ComponentModel;
 using System.Text.Json;
 using System.Timers;
+using Microsoft.Extensions.Configuration;
+using NetCoreAudio;
 using Twitch_Channel_Points_Redemption_Timer.Models;
 using TwitchLib.Api.Helix;
 using TwitchLib.PubSub.Interfaces;
@@ -45,12 +46,22 @@ namespace Twitch_Channel_Points_Redemption_Timer
 
         private bool _bindingRedemptions = false;
 
+        private Player _player;
+        private bool _finishedPlaying;
+        private SemaphoreSlim _playingAudio = new SemaphoreSlim(1, 1);
+
         public RedemptionTimer(ITwitchPubSub pubsub, IConfiguration configuration)
         {
             _twitchConnection = new TwitchConnection();
             configuration.GetRequiredSection("Twitch").Bind(_twitchConnection);
 
             InitializeComponent();
+
+            Output output = new Output();
+            configuration.GetRequiredSection("Output").Bind(output);
+
+            outputFilename = output.OutputFile;
+            _redemptions = new BindingList<LocalRedemption>(output.Redemptions);
 
             _redemptions.AllowNew = true;
             _redemptions.AllowEdit = true;
@@ -70,12 +81,6 @@ namespace Twitch_Channel_Points_Redemption_Timer
             _twitchPubSub.OnPubSubServiceConnected += _twitchPubSub_OnPubSubServiceConnected;
             _twitchPubSub.OnPubSubServiceError += _twitchPubSub_OnPubSubServiceError;
 
-            Output output = new Output();
-            configuration.GetRequiredSection("Output").Bind(output);
-
-            outputFilename = output.OutputFile;
-            _redemptions = new BindingList<LocalRedemption>(output.Redemptions);
-
             txt_UserId.TextChanged += delegate { InitializeHelix(); };
             txt_OAuth.TextChanged += delegate { InitializeHelix(); };
 
@@ -92,6 +97,8 @@ namespace Twitch_Channel_Points_Redemption_Timer
             _timer.Interval = _updateInterval.TotalMilliseconds;
             _timer.Elapsed += UpdateTimes;
             _timer.Start();
+
+            _player = new Player();
 
             outputFile = File.Open(outputFilename, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read);
         }
@@ -195,7 +202,7 @@ namespace Twitch_Channel_Points_Redemption_Timer
             });
         }
 
-        private void _twitchPubSub_OnChannelPointsRewardRedeemed(object? sender, TwitchLib.PubSub.Events.OnChannelPointsRewardRedeemedArgs e)
+        private async void _twitchPubSub_OnChannelPointsRewardRedeemed(object? sender, TwitchLib.PubSub.Events.OnChannelPointsRewardRedeemedArgs e)
         {
             LocalRedemption? redemption = _redemptions.FirstOrDefault(r => r.Name.Equals(e.RewardRedeemed.Redemption.Reward.Title, StringComparison.OrdinalIgnoreCase) && r.Enabled);
 
@@ -220,6 +227,7 @@ namespace Twitch_Channel_Points_Redemption_Timer
                 else
                 {
                     _timers.Add(groupName, new List<TimedRedemption>() { new TimedRedemption { Name = key, Duration = redemption.Duration } });
+                    await PlaySoundEffect(redemption.ActiveSoundEffect);
                 }
             }
         }
@@ -233,7 +241,7 @@ namespace Twitch_Channel_Points_Redemption_Timer
             return redemption.Duration > TimeSpan.Zero;
         }
 
-        private void UpdateGroup(string group)
+        private async void UpdateGroup(string group)
         {
             if (string.IsNullOrEmpty(group))
             {
@@ -246,21 +254,45 @@ namespace Twitch_Channel_Points_Redemption_Timer
                 {
                     string? soundFile = _redemptions.FirstOrDefault(r => r.Name == firstRedemption.Name)?.ExpiredSoundEffect ?? null;
 
-                    if (!string.IsNullOrEmpty(soundFile) && File.Exists(soundFile))
-                    {
-                        try
-                        {
-                            // Sound implementation here.
-                        }
-                        catch (Exception ex)
-                        {
-                            MessageBox.Show($"Your sound file '{soundFile}' failed to play.  Reason: {ex.Message}");
-                        }
-                    }
-
+                    await PlaySoundEffect(soundFile);
                     _timers[group].Remove(firstRedemption);
+
+                    if (_timers[group].Any())
+                    {
+                        firstRedemption = _timers[group].First();
+                        soundFile = _redemptions.FirstOrDefault(r => r.Name == firstRedemption.Name)?.ActiveSoundEffect ?? null;
+
+                        await _playingAudio.WaitAsync();
+                        await PlaySoundEffect(soundFile);
+                    }
                 }
             }
+        }
+
+        private async Task PlaySoundEffect(string? soundFile)
+        {
+            await _playingAudio.WaitAsync();
+
+            if (soundsEnabled && !string.IsNullOrEmpty(soundFile) && File.Exists(soundFile))
+            {
+                try
+                {
+                    _finishedPlaying = false;
+                    await _player.SetVolume((byte)numud_Volume.Value).ConfigureAwait(false);
+                    await _player.Play(soundFile).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Your sound file '{soundFile}' failed to play.  Reason: {ex.Message}");
+                }
+            }
+
+            while (!_finishedPlaying)
+            {
+                Thread.Sleep(100);
+            }
+
+            _playingAudio.Release();
         }
 
         private void UpdateTimes(object? sender, ElapsedEventArgs _)
