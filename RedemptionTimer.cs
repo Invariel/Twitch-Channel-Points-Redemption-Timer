@@ -403,7 +403,7 @@ namespace Twitch_Channel_Points_Redemption_Timer
             {
                 ValidateHelix();
 
-                var userIds = await _helix.Users.GetUsersAsync(logins: new List<string>() { _twitchConnection.ChannelName }, accessToken: _helix.Settings.AccessToken);
+                var userIds = await _helix.Users.GetUsersAsync(logins: new List<string>() { txt_Username.Text }, accessToken: _helix.Settings.AccessToken);
 
                 txt_UserId.Invoke((MethodInvoker)delegate { txt_UserId.Text = userIds.Users[0].Id; });
                 _twitchConnection.ChannelId = userIds.Users[0].Id;
@@ -449,7 +449,11 @@ namespace Twitch_Channel_Points_Redemption_Timer
         }
 
         private async Task<GetCustomRewardsResponse> GetAllRedemptions()
-            => await _helix.ChannelPoints.GetCustomRewardAsync(_helix.Settings.ClientId, null, true, _helix.Settings.AccessToken);
+            => await _helix.ChannelPoints.GetCustomRewardAsync(
+                broadcasterId: txt_UserId.Text ?? _twitchConnection.ChannelId ?? "",
+                rewardIds: null,
+                onlyManageableRewards: true,
+                accessToken: _helix.Settings.AccessToken);
 
         private async void EnableAllRedemptions(object? sender, EventArgs? e)
         {
@@ -459,12 +463,19 @@ namespace Twitch_Channel_Points_Redemption_Timer
 
             foreach (var redeem in validRedeems)
             {
-                await _helix.ChannelPoints.UpdateCustomRewardAsync(
-                    broadcasterId: _helix.Settings.ClientId,
-                    accessToken: _helix.Settings.AccessToken,
-                    rewardId: redeem.Id,
-                    request: new TwitchLib.Api.Helix.Models.ChannelPoints.UpdateCustomReward.UpdateCustomRewardRequest() { IsEnabled = true }
-                );
+                try
+                {
+                    await _helix.ChannelPoints.UpdateCustomRewardAsync(
+                        broadcasterId: txt_UserId.Text ?? _twitchConnection.ChannelId ?? "",
+                        accessToken: _helix.Settings.AccessToken,
+                        rewardId: redeem.Id,
+                        request: new TwitchLib.Api.Helix.Models.ChannelPoints.UpdateCustomReward.UpdateCustomRewardRequest() { IsEnabled = true }
+                    );
+                }
+                catch (Exception)
+                {
+                    // Do nothing.
+                }
             }
         }
 
@@ -477,7 +488,7 @@ namespace Twitch_Channel_Points_Redemption_Timer
             foreach (var redeem in validRedeems)
             {
                 await _helix.ChannelPoints.UpdateCustomRewardAsync(
-                    broadcasterId: _helix.Settings.ClientId,
+                    broadcasterId: txt_UserId.Text ?? _twitchConnection.ChannelId ?? "",
                     accessToken: _helix.Settings.AccessToken,
                     rewardId: redeem.Id,
                     request: new TwitchLib.Api.Helix.Models.ChannelPoints.UpdateCustomReward.UpdateCustomRewardRequest() { IsEnabled = false }
