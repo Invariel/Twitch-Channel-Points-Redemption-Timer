@@ -26,7 +26,7 @@ Each Redemption is made of:
 - a `SoundEffect`, which, if a valid sound file, will be played when the item is redeemed,
 - `UseMessage` as true or false, indicating whether to use the redemption's user message as its own timer,
 - `Enabled` as true or false, if false the redemption is ignored.
- 
+
 `Filename` is the filename that your data is output to, so that it can be displayed wherever you need it displayed.  Because this project constantly writes to the file, it is recommended you use something that constantly reads from the file (like BareTail or OBS display) rather than keeping the file open in a text editor (like Notepad).
 
 # Connection.json
