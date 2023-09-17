@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using NetCoreAudio;
 using Twitch_Channel_Points_Redemption_Timer.Models;
 using TwitchLib.Api.Helix;
+using TwitchLib.Api.Helix.Models.ChannelPoints.GetCustomReward;
 using TwitchLib.PubSub.Interfaces;
 
 using LocalRedemption = Twitch_Channel_Points_Redemption_Timer.Models.Redemption;
@@ -114,10 +115,15 @@ namespace Twitch_Channel_Points_Redemption_Timer
         private void UpdateRedemptions()
         {
             dg_Redemptions.Columns["Name"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-            dg_Redemptions.Columns["Duration"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
-            dg_Redemptions.Columns["ActiveSoundEffect"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
-            dg_Redemptions.Columns["ExpiredSoundEffect"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
-            dg_Redemptions.Columns["Group"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+            dg_Redemptions.Columns["Name"].FillWeight = 75;
+            dg_Redemptions.Columns["Duration"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            dg_Redemptions.Columns["Duration"].FillWeight = 30;
+            dg_Redemptions.Columns["ActiveSoundEffect"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            dg_Redemptions.Columns["ActiveSoundEffect"].FillWeight = 40;
+            dg_Redemptions.Columns["ExpiredSoundEffect"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            dg_Redemptions.Columns["ExpiredSoundEffect"].FillWeight = 40;
+            dg_Redemptions.Columns["Group"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            dg_Redemptions.Columns["Group"].FillWeight = 20;
             dg_Redemptions.Columns["UseMessage"].AutoSizeMode = DataGridViewAutoSizeColumnMode.ColumnHeader;
             dg_Redemptions.Columns["Enabled"].AutoSizeMode = DataGridViewAutoSizeColumnMode.ColumnHeader;
         }
@@ -335,5 +341,126 @@ namespace Twitch_Channel_Points_Redemption_Timer
             outputFile.Write(System.Text.Encoding.GetEncoding("UTF-8").GetBytes(outputString), 0, outputString.Length);
             outputFile.Flush();
         }
+
+        #region Twitch Stuff
+        private void GenerateOAuthToken(object? sender, EventArgs? e)
+        {
+            string uri = "https://id.twitch.tv/oauth2/authorize?client_id=" +
+                         General.CLIENT_ID +
+                         "&redirect_uri=" +
+                         General.AUTH_URI +
+                         "&response_type=token" +
+                         "&scope=channel:read:redemptions%20channel:manage:redemptions" +
+                         "&state=" +
+                         General.GenerateStateString();
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = uri,
+                UseShellExecute = true
+            });
+        }
+
+        private void InitializeHelix()
+        {
+            _helix = new TwitchLib.Api.Helix.Helix();
+            _helix.Settings.ClientId = General.CLIENT_ID;
+            _helix.Settings.AccessToken = txt_OAuth.Text ?? _twitchConnection.OAuthToken ?? "";
+        }
+
+        private void ValidateHelix()
+        {
+            ArgumentException.ThrowIfNullOrEmpty(_helix.Settings.ClientId, nameof(_helix.Settings.ClientId));
+            ArgumentException.ThrowIfNullOrEmpty(_helix.Settings.AccessToken, nameof(_helix.Settings.AccessToken));
+        }
+
+        private async void ConnectToTwitch(object? sender, EventArgs? e)
+        {
+            try
+            {
+                ValidateHelix();
+
+                var userIds = await _helix.Users.GetUsersAsync(logins: new List<string>() { _twitchConnection.ChannelName }, accessToken: _helix.Settings.AccessToken);
+
+                txt_UserId.Invoke((MethodInvoker)delegate { txt_UserId.Text = userIds.Users[0].Id; });
+                _twitchConnection.ChannelId = userIds.Users[0].Id;
+
+                _twitchPubSub.ListenToChannelPoints(_twitchConnection.ChannelId);
+                _twitchPubSub.Connect();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"There was a problem: {ex.Message}{Environment.NewLine}{ex.InnerException?.Message}");
+
+                btn_StartListening.Text = _isNotConnected;
+                btn_StartListening.Enabled = false;
+            }
+        }
+
+        public async void CreateRedemption(object? sender, EventArgs? e)
+        {
+            try
+            {
+                string rewardName = txt_RedemptionName.Text;
+                int rewardPoints = (int)numud_RedemptionPoints.Value;
+                string rewardPrompt = txt_RedemptionPrompt.Text;
+                bool rewardInputRequired = chk_RedemptionUserInputRequired.Checked;
+
+                await _helix.ChannelPoints.CreateCustomRewardsAsync(
+                    broadcasterId: txt_UserId.Text,
+                    request: new TwitchLib.Api.Helix.Models.ChannelPoints.CreateCustomReward.CreateCustomRewardsRequest()
+                    {
+                        Title = rewardName,
+                        Cost = rewardPoints,
+                        IsUserInputRequired = rewardInputRequired,
+                        Prompt = rewardInputRequired ? rewardPrompt : null,
+                        IsEnabled = true,
+                    });
+
+                MessageBox.Show("Redemption created successfully.  Please access your Twitch dashboard to edit the redemption's description.");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred trying to create the redemption: {ex.Message}");
+            }
+        }
+
+        private async Task<GetCustomRewardsResponse> GetAllRedemptions()
+            => await _helix.ChannelPoints.GetCustomRewardAsync(_helix.Settings.ClientId, null, true, _helix.Settings.AccessToken);
+
+        private async void EnableAllRedemptions(object? sender, EventArgs? e)
+        {
+            var redeems = (await GetAllRedemptions()).Data;
+
+            var validRedeems = redeems.Where(r => _redemptions.Any(redemption => redemption.Name.Equals(r.Title, StringComparison.InvariantCultureIgnoreCase)));
+
+            foreach (var redeem in validRedeems)
+            {
+                await _helix.ChannelPoints.UpdateCustomRewardAsync(
+                    broadcasterId: _helix.Settings.ClientId,
+                    accessToken: _helix.Settings.AccessToken,
+                    rewardId: redeem.Id,
+                    request: new TwitchLib.Api.Helix.Models.ChannelPoints.UpdateCustomReward.UpdateCustomRewardRequest() { IsEnabled = true }
+                );
+            }
+        }
+
+        private async void DisableAllRedemptions(object? sender, EventArgs? e)
+        {
+            var redeems = (await GetAllRedemptions()).Data;
+
+            var validRedeems = redeems.Where(r => _redemptions.Any(redemption => redemption.Name.Equals(r.Title, StringComparison.InvariantCultureIgnoreCase)));
+
+            foreach (var redeem in validRedeems)
+            {
+                await _helix.ChannelPoints.UpdateCustomRewardAsync(
+                    broadcasterId: _helix.Settings.ClientId,
+                    accessToken: _helix.Settings.AccessToken,
+                    rewardId: redeem.Id,
+                    request: new TwitchLib.Api.Helix.Models.ChannelPoints.UpdateCustomReward.UpdateCustomRewardRequest() { IsEnabled = false }
+                );
+            }
+        }
+        #endregion
     }
 }
