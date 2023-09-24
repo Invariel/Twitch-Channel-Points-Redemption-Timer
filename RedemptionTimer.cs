@@ -107,7 +107,10 @@ namespace Twitch_Channel_Points_Redemption_Timer
             _soundTimer.Start();
 
             _player = new Player();
-            _player.PlaybackFinished += (s, e) => { _finishedPlaying = true; };
+            _player.PlaybackFinished += (s, e) =>
+            {
+                _finishedPlaying = true;
+            };
 
             outputFile = File.Open(outputFilename, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read);
         }
@@ -222,7 +225,7 @@ namespace Twitch_Channel_Points_Redemption_Timer
 
             if (redemption is not null)
             {
-                string groupName = redemption.Group.Trim();
+                string groupName = redemption.Group?.Trim() ?? "";
                 string key = redemption.UseMessage ? e.RewardRedeemed.Redemption.UserInput : e.RewardRedeemed.Redemption.Reward.Title;
 
                 if (_timers.ContainsKey(groupName))
@@ -231,7 +234,18 @@ namespace Twitch_Channel_Points_Redemption_Timer
 
                     if (existingRedemption is null)
                     {
-                        _timers[groupName].Add(new TimedRedemption { Name = key, Duration = redemption.Duration });
+                        _timers[groupName].Add(new TimedRedemption
+                        {
+                            Name = key,
+                            Duration = redemption.Duration,
+                            ActiveSoundEffect = redemption.ActiveSoundEffect,
+                            ExpiredSoundEffect = redemption.ExpiredSoundEffect
+                        });
+
+                        if (string.IsNullOrEmpty(groupName))
+                        {
+                            QueueSoundFile(redemption.ActiveSoundEffect);
+                        }
                     }
                     else
                     {
@@ -240,7 +254,15 @@ namespace Twitch_Channel_Points_Redemption_Timer
                 }
                 else
                 {
-                    _timers.Add(groupName, new List<TimedRedemption>() { new TimedRedemption { Name = key, Duration = redemption.Duration } });
+                    _timers.Add(groupName, new List<TimedRedemption>() { new TimedRedemption
+                        {
+                            Name = key,
+                            Duration = redemption.Duration,
+                            ActiveSoundEffect = redemption.ActiveSoundEffect,
+                            ExpiredSoundEffect = redemption.ExpiredSoundEffect
+                        }
+                    });
+
                     QueueSoundFile(redemption.ActiveSoundEffect);
                 }
             }
@@ -249,36 +271,15 @@ namespace Twitch_Channel_Points_Redemption_Timer
         /// <summary></summary>
         /// <param name="redemption"></param>
         /// <returns>True if the redemption has time remaining, false otherwise.</returns>
-        private bool UpdateRedemption(ref TimedRedemption redemption)
+        private void UpdateRedemption(ref TimedRedemption redemption)
         {
-            redemption.Duration = redemption.Duration.Subtract(_updateInterval);
-            return redemption.Duration >= TimeSpan.Zero;
-        }
+            if (redemption is not null)
+            {
+                redemption.Duration -= _updateInterval;
 
-        private async void UpdateGroup(string group)
-        {
-            if (string.IsNullOrEmpty(group))
-            {
-                _timers[group] = _timers[group].Where(r => UpdateRedemption(ref r)).ToList();
-            }
-            else
-            {
-                TimedRedemption firstRedemption = _timers[group].First();
-                if (!UpdateRedemption(ref firstRedemption))
+                if (redemption.Duration <= TimeSpan.Zero)
                 {
-                    string? soundFile = _redemptions.FirstOrDefault(r => r.Name == firstRedemption.Name)?.ExpiredSoundEffect ?? null;
-
-                    QueueSoundFile(soundFile);
-                    _timers[group].Remove(firstRedemption);
-
-                    if (_timers[group].Any())
-                    {
-                        firstRedemption = _timers[group].First();
-                        soundFile = _redemptions.FirstOrDefault(r => r.Name == firstRedemption.Name)?.ActiveSoundEffect ?? null;
-
-                        await _playingAudio.WaitAsync();
-                        QueueSoundFile(soundFile);
-                    }
+                    QueueSoundFile(redemption.ExpiredSoundEffect);
                 }
             }
         }
@@ -289,43 +290,93 @@ namespace Twitch_Channel_Points_Redemption_Timer
             {
                 _queuedSoundFiles.Add(soundFile);
             }
+        }
 
-            _queuedSoundFiles.RemoveAll(q => string.IsNullOrEmpty(q));
+        private async void UpdateGroup(string group)
+        {
+            if (string.IsNullOrEmpty(group))
+            {
+                _timers[group].ForEach(r =>
+                {
+                    TimedRedemption redemption = r;
+                    UpdateRedemption(ref redemption);
+                });
+
+                _timers[group] = _timers[group].Where(r => r.Duration >= TimeSpan.Zero).ToList();
+            }
+            else
+            {
+                TimedRedemption firstRedemption = _timers[group].First();
+                UpdateRedemption(ref firstRedemption);
+
+                if (firstRedemption.Duration <= TimeSpan.Zero)
+                {
+                    _timers[group].Remove(firstRedemption);
+
+                    if (_timers[group].Any())
+                    {
+                        firstRedemption = _timers[group].First();
+                        QueueSoundFile(firstRedemption.ActiveSoundEffect);
+                    }
+                }
+            }
         }
 
         private void PlaySounds(object? sender, EventArgs e)
         {
             if (_finishedPlaying && _queuedSoundFiles.Any())
             {
-                string? soundFile = _queuedSoundFiles.FirstOrDefault();
-                _queuedSoundFiles.RemoveAt(0);
+                string? soundFile;
 
-                if (soundFile is not null)
+                while (_queuedSoundFiles.Any() && !_player.Playing)
                 {
-                    var _ = PlaySoundEffect(soundFile);
+                    soundFile = _queuedSoundFiles.FirstOrDefault();
+                    _queuedSoundFiles.RemoveAt(0);
+
+                    if (soundFile is not null)
+                    {
+                        var _ = PlaySoundEffect(soundFile);
+                    }
                 }
             }
         }
 
         private async Task PlaySoundEffect(string? soundFile)
         {
+            _playingAudio.Wait(250);
+
             if (soundsEnabled && !string.IsNullOrEmpty(soundFile) && File.Exists(soundFile))
             {
                 try
                 {
                     _finishedPlaying = false;
-                    await _player.SetVolume((byte)numud_Volume.Value).ConfigureAwait(false);
+
+                    // await _player.SetVolume((byte)numud_Volume.Value).ConfigureAwait(false); // This library has a SetVolume() method, but it doesn't do anything.
                     await _player.Play(soundFile).ConfigureAwait(false);
+
+
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show($"Your sound file '{soundFile}' failed to play.  Reason: {ex.Message}");
                 }
             }
+
+            while (!_finishedPlaying)
+            {
+                Thread.Sleep(0);
+            }
+
+            _playingAudio.Release();
         }
 
         private void UpdateTimes(object? sender, ElapsedEventArgs _)
         {
+            if (!_player.Playing)
+            {
+                _finishedPlaying = true;
+            }
+
             if (!timersEnabled)
             {
                 return;
@@ -351,9 +402,14 @@ namespace Twitch_Channel_Points_Redemption_Timer
                 {
                     string curString = r.Name + " - ";
 
-                    if (r.Duration.Hours > 0) { curString += r.Duration.ToString(@"h\:mm\:ss"); }
-                    else { curString += r.Duration.ToString(@"m\:ss"); }
-                    outputString += $"{curString}{Environment.NewLine}";
+                    TimeSpan duration = r.Duration;
+
+                    if (duration.TotalSeconds > 0)
+                    {
+                        if (duration.Hours > 0) { curString += duration.ToString(@"h\:mm\:ss"); }
+                        else { curString += duration.ToString(@"m\:ss"); }
+                        outputString += $"{curString}{Environment.NewLine}";
+                    }
                 });
 
                 outputString += Environment.NewLine;
@@ -362,6 +418,14 @@ namespace Twitch_Channel_Points_Redemption_Timer
             outputFile.Position = 0;
             outputFile.SetLength(0);
             outputFile.Write(System.Text.Encoding.GetEncoding("UTF-8").GetBytes(outputString), 0, outputString.Length);
+
+#if DEBUG
+            outputFile.Write(System.Text.Encoding.GetEncoding("UTF-8").GetBytes(_finishedPlaying.ToString()));
+
+            string soundFilesRemaining = string.Join("; ", _queuedSoundFiles.ToArray());
+            outputFile.Write(System.Text.Encoding.GetEncoding("UTF-8").GetBytes(soundFilesRemaining));
+#endif
+
             outputFile.Flush();
         }
 
